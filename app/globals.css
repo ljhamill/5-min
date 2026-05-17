@@ -1,110 +1,89 @@
 @import "tailwindcss";
 
+/* ─── Axiom-inspired design tokens ───────────────────────────── */
 :root {
-  --bg-base: #080808;
-  --bg-card: #0f0f0f;
-  --bg-elevated: #161616;
-  --border: #1e1e1e;
-  --border-bright: #2a2a2a;
-  --text-primary: #e2e2e2;
-  --text-secondary: #6b6b6b;
-  --text-dim: #3d3d3d;
-  --green: #00d084;
-  --green-dim: #00d08420;
-  --red: #ff4757;
-  --red-dim: #ff475720;
-  --amber: #f0a500;
-  --amber-dim: #f0a50020;
-  --cyan: #00b4d8;
-  --cyan-dim: #00b4d820;
-  --purple: #9b59b6;
+  /* Backgrounds — cool near-black with blue tint */
+  --bg-base:     #0c0c10;
+  --bg-surface:  #111116;
+  --bg-elevated: #16161d;
+  --bg-overlay:  #1c1c25;
+
+  /* Borders */
+  --border:        #1e1e26;
+  --border-bright: #2a2a38;
+
+  /* Text */
+  --text-primary:   #e2e2ea;
+  --text-secondary: #6b6b7a;
+  --text-dim:       #3a3a48;
+
+  /* Accent — indigo (Axiom signature) */
+  --accent:       #4f5cf0;
+  --accent-hover: #5d6af2;
+  --accent-dim:   rgba(79, 92, 240, 0.12);
+
+  /* Semantic */
+  --green:     #22c55e;
+  --green-dim: rgba(34, 197, 94, 0.12);
+  --red:       #ef4444;
+  --red-dim:   rgba(239, 68, 68, 0.12);
+  --amber:     #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.12);
+
+  /* Layout */
+  --nav-h:    52px;
+  --subnav-h: 44px;
+  --bar-h:    40px;
 }
 
 @theme inline {
   --color-background: var(--bg-base);
   --color-foreground: var(--text-primary);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-  margin: 0;
-}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
 
 body {
   background: var(--bg-base);
   color: var(--text-primary);
-  font-family: var(--font-geist-mono), "JetBrains Mono", "Fira Code", monospace;
+  font-family: var(--font-inter), Inter, system-ui, -apple-system, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-base);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-bright);
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-dim);
-}
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
 
 /* Selection */
-::selection {
-  background: var(--amber-dim);
-  color: var(--amber);
-}
+::selection { background: var(--accent-dim); color: var(--accent); }
 
-/* Utility classes that extend Tailwind */
-.terminal-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-}
+/* ─── Utilities ───────────────────────────────────────────────── */
+.text-green     { color: var(--green); }
+.text-red       { color: var(--red); }
+.text-accent    { color: var(--accent); }
+.text-secondary { color: var(--text-secondary); }
+.text-dim       { color: var(--text-dim); }
+.tabnum         { font-variant-numeric: tabular-nums; }
 
-.terminal-card-elevated {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-bright);
-}
-
-.text-green { color: var(--green); }
-.text-red { color: var(--red); }
-.text-amber { color: var(--amber); }
-.text-cyan { color: var(--cyan); }
-.text-dim { color: var(--text-secondary); }
-.text-xdim { color: var(--text-dim); }
-
-.bg-green-dim { background: var(--green-dim); }
-.bg-red-dim { background: var(--red-dim); }
-.bg-amber-dim { background: var(--amber-dim); }
-
-.border-green { border-color: var(--green); }
-.border-red { border-color: var(--red); }
-.border-amber { border-color: var(--amber); }
-
-/* Blink animation for live indicators */
-@keyframes blink {
+/* ─── Animations ──────────────────────────────────────────────── */
+@keyframes pulse-dot {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  50%       { opacity: 0.3; }
 }
-.blink { animation: blink 1.2s step-end infinite; }
+.pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
 
-/* Pulse for data updates */
-@keyframes flash {
-  0% { opacity: 1; }
-  50% { opacity: 0.4; }
-  100% { opacity: 1; }
+@keyframes flash-green {
+  0%   { background: var(--green-dim); }
+  100% { background: transparent; }
 }
-.flash { animation: flash 0.3s ease-out; }
+@keyframes flash-red {
+  0%   { background: var(--red-dim); }
+  100% { background: transparent; }
+}
+.row-flash-up   { animation: flash-green 0.5s ease-out; }
+.row-flash-down { animation: flash-red   0.5s ease-out; }
