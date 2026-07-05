@@ -8,6 +8,8 @@ import { useCountdown } from "@/hooks/useCountdown";
 import { calcProbability, calcEdge } from "@/lib/probability/engine";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
 import type { AssetData } from "@/hooks/useAssetPrices";
+import { TRADING_ENABLED } from "@/lib/featureFlags";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 
 type Props = {
   market: PolymarketMarket | null;
@@ -75,6 +77,7 @@ export function OrderTicket({ market, assetData }: Props) {
     state.status === "signing" || state.status === "pending";
 
   function handleTrade(side: "YES" | "NO") {
+    if (!TRADING_ENABLED) return;
     if (!market) return;
     const tokenId =
       side === "YES"
@@ -178,11 +181,12 @@ export function OrderTicket({ market, assetData }: Props) {
 
         {/* Amount input */}
         <div>
-          <div className="text-[10px] uppercase tracking-wide mb-1.5" style={{ color: "var(--text-dim)" }}>
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide mb-1.5" style={{ color: "var(--text-dim)" }}>
             Size (USDC)
+            {!TRADING_ENABLED && <SoonBadge />}
           </div>
           <div
-            className="flex items-center gap-1.5 px-3 py-2 rounded"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded ${!TRADING_ENABLED ? "opacity-40" : ""}`}
             style={{
               background: "var(--bg-overlay)",
               border: "1px solid var(--border)",
@@ -193,16 +197,18 @@ export function OrderTicket({ market, assetData }: Props) {
               type="number"
               value={amount}
               min={1}
+              disabled={!TRADING_ENABLED}
               onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
               className="flex-1 bg-transparent outline-none tabnum text-[13px]"
               style={{ color: "var(--text-primary)", border: "none" }}
             />
           </div>
           {/* Quick-pick buttons */}
-          <div className="flex gap-1.5 mt-2">
+          <div className={`flex gap-1.5 mt-2 ${!TRADING_ENABLED ? "opacity-40" : ""}`}>
             {[10, 25, 50, 100].map((v) => (
               <button
                 key={v}
+                disabled={!TRADING_ENABLED}
                 onClick={() => setAmount(v)}
                 className="flex-1 py-1 rounded text-[10px] font-medium transition-colors"
                 style={{
@@ -218,7 +224,19 @@ export function OrderTicket({ market, assetData }: Props) {
         </div>
 
         {/* Trade buttons */}
-        {!isConnected ? (
+        {!TRADING_ENABLED ? (
+          <div
+            className="flex items-center justify-center gap-2 py-3 rounded text-[12px]"
+            style={{
+              background: "var(--bg-overlay)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            Trading coming soon
+            <SoonBadge />
+          </div>
+        ) : !isConnected ? (
           <div
             className="flex items-center justify-center py-3 rounded text-[12px]"
             style={{
@@ -275,6 +293,23 @@ export function OrderTicket({ market, assetData }: Props) {
               )}
             </button>
           </div>
+        )}
+
+        {/* View on Polymarket — permanent, renders in both MVP and full-trading modes */}
+        {market.slug && (
+          <a
+            href={`https://polymarket.com/event/${market.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 py-2.5 rounded text-[12px] font-medium transition-colors"
+            style={{
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            View on Polymarket
+            <span aria-hidden>↗</span>
+          </a>
         )}
 
         {/* Trade status */}

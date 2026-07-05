@@ -6,8 +6,6 @@ type Props = {
   tokenId: string | undefined;
 };
 
-const MAX_LEVELS = 8;
-
 function formatPrice(price: string): string {
   const n = parseFloat(price);
   return `${(n * 100).toFixed(0)}¢`;
@@ -15,8 +13,8 @@ function formatPrice(price: string): string {
 
 function formatSize(size: string): string {
   const n = parseFloat(size);
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return n.toFixed(0);
+  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+  return `$${n.toFixed(0)}`;
 }
 
 function LevelRow({
@@ -101,8 +99,10 @@ export function Orderbook({ tokenId }: Props) {
     );
   }
 
-  const displayBids = book.bids.slice(0, MAX_LEVELS);
-  const displayAsks = book.asks.slice(0, MAX_LEVELS);
+  // Best bid = highest price, best ask = lowest price — always shown first,
+  // with the rest of the book scrollable below.
+  const displayBids = [...book.bids].sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+  const displayAsks = [...book.asks].sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
 
   const maxBidSize = Math.max(...displayBids.map((b) => parseFloat(b.size)), 1);
   const maxAskSize = Math.max(...displayAsks.map((a) => parseFloat(a.size)), 1);
@@ -131,10 +131,10 @@ export function Orderbook({ tokenId }: Props) {
         </span>
       </div>
 
-      {/* Two columns */}
+      {/* Two columns — best bid/ask always first, rest of the book scrolls */}
       <div className="flex flex-1 overflow-hidden">
         {/* Bids */}
-        <div className="flex-1 flex flex-col overflow-hidden border-r border-[var(--border)]">
+        <div className="flex-1 flex flex-col overflow-y-auto border-r border-[var(--border)]">
           {displayBids.map((level, i) => (
             <LevelRow
               key={`bid-${i}`}
@@ -147,7 +147,7 @@ export function Orderbook({ tokenId }: Props) {
         </div>
 
         {/* Asks */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-y-auto">
           {displayAsks.map((level, i) => (
             <LevelRow
               key={`ask-${i}`}

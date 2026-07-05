@@ -2,6 +2,8 @@
 
 import type { AssetData } from "@/hooks/useAssetPrices";
 import { useAccount } from "wagmi";
+import { TRADING_ENABLED } from "@/lib/featureFlags";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 
 type Props = {
   prices: Record<string, AssetData>;
@@ -49,7 +51,12 @@ export function BottomBar({ prices }: Props) {
 
       {/* Right: wallet status */}
       <div className="flex items-center gap-3">
-        {isConnected && address ? (
+        {!TRADING_ENABLED ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[var(--text-secondary)]">Trading</span>
+            <SoonBadge />
+          </div>
+        ) : isConnected && address ? (
           <span className="text-[var(--text-secondary)]">
             {address.slice(0, 6)}…{address.slice(-4)}
           </span>

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { TRADING_ENABLED } from "@/lib/featureFlags";
+import { SoonBadge } from "@/components/ui/SoonBadge";
 
 export type MarketVertical = {
   id: string;
@@ -89,7 +91,16 @@ export function TopNav({ activeVertical = "crypto" }: Props) {
 
       {/* Right: wallet */}
       <div className="flex items-center gap-2">
-        {isConnected && address ? (
+        {!TRADING_ENABLED ? (
+          <button
+            disabled
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-medium text-white opacity-40"
+            style={{ background: "var(--accent)" }}
+          >
+            Connect Wallet
+            <SoonBadge />
+          </button>
+        ) : isConnected && address ? (
           <div className="flex items-center gap-2">
             <div
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border"

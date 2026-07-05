@@ -24,16 +24,22 @@ type Props = {
   onSelect: (market: PolymarketMarket) => void;
 };
 
-function formatWindowTime(iso: string): string {
-  if (!iso) return "—";
-  return (
-    new Date(iso).toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "America/New_York",
-    }) + " ET"
-  );
+function formatWindowRange(startIso: string, endIso: string): string {
+  if (!startIso || !endIso) return "—";
+  const opts: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "America/New_York",
+  };
+  const start = new Date(startIso).toLocaleTimeString("en-US", opts);
+  const end = new Date(endIso).toLocaleTimeString("en-US", opts);
+
+  // Drop the AM/PM suffix from the start time when both share the same period
+  const [startTime, startPeriod] = start.split(" ");
+  const [, endPeriod] = end.split(" ");
+  if (startPeriod === endPeriod) return `${startTime}–${end} ET`;
+  return `${start}–${end} ET`;
 }
 
 function fmt(price: number): string {
@@ -112,7 +118,7 @@ function WindowGroupHeader({
       )}
 
       <span className="text-[11px] font-medium text-[var(--text-primary)] truncate">
-        {formatWindowTime(windowStartIso)}
+        {formatWindowRange(windowStartIso, endDateIso)}
       </span>
 
       <span
