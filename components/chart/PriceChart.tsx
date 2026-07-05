@@ -292,41 +292,47 @@ export function PriceChart({ market }: Props) {
     setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  if (!market) {
-    return (
-      <div
-        className="flex-1 flex items-center justify-center"
-        style={{ background: "#0c0c10", color: "var(--text-dim)", fontSize: 12 }}
-      >
-        Select a market to view chart
-      </div>
-    );
-  }
-
+  // IMPORTANT: the chart-init effect above has an empty dependency array, so
+  // it only ever runs once, on this component's first mount. The container
+  // div (with containerRef) must therefore always be in the tree — even when
+  // no market is selected yet — or createChart() never gets a real DOM node
+  // to attach to, and the chart silently never renders even after a market
+  // is later selected.
   return (
     <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#0c0c10" }}>
       {/* Series toggles */}
-      <div
-        className="flex items-center gap-1.5 px-3 py-2 shrink-0 border-b"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <ToggleChip label="Market" active={visible.market} onClick={() => toggle("market")} />
-        <ToggleChip label="Model" active={visible.model} onClick={() => toggle("model")} />
-        {asset && (
-          <ToggleChip
-            label={`${asset} price`}
-            active={visible.asset}
-            onClick={() => toggle("asset")}
-          />
-        )}
-        {isLoading && (
-          <span className="text-[10px] ml-auto" style={{ color: "var(--text-dim)" }}>
-            Loading history…
-          </span>
+      {market && (
+        <div
+          className="flex items-center gap-1.5 px-3 py-2 shrink-0 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <ToggleChip label="Market" active={visible.market} onClick={() => toggle("market")} />
+          <ToggleChip label="Model" active={visible.model} onClick={() => toggle("model")} />
+          {asset && (
+            <ToggleChip
+              label={`${asset} price`}
+              active={visible.asset}
+              onClick={() => toggle("asset")}
+            />
+          )}
+          {isLoading && (
+            <span className="text-[10px] ml-auto" style={{ color: "var(--text-dim)" }}>
+              Loading history…
+            </span>
+          )}
+        </div>
+      )}
+
+      <div ref={containerRef} className="flex-1 w-full relative" style={{ minHeight: 0 }}>
+        {!market && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ color: "var(--text-dim)", fontSize: 12 }}
+          >
+            Select a market to view chart
+          </div>
         )}
       </div>
-
-      <div ref={containerRef} className="flex-1 w-full" style={{ minHeight: 0 }} />
     </div>
   );
 }
