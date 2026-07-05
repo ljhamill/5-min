@@ -11,9 +11,7 @@ import { PriceChart } from "@/components/chart/PriceChart";
 import { Orderbook } from "@/components/orderbook/Orderbook";
 import { OrderTicket } from "@/components/trade/OrderTicket";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import { useOrderbook } from "@/hooks/useOrderbook";
 
-/** Bridge component: gets the YES token orderbook midPrice for the chart */
 function TerminalContent({
   markets,
   prices,
@@ -26,8 +24,6 @@ function TerminalContent({
   onSelect: (m: PolymarketMarket) => void;
 }) {
   const upToken = selectedMarket?.tokens.find((t) => t.outcome === "Yes");
-  const book = useOrderbook(upToken?.token_id);
-  const midPrice = book?.midPrice ?? upToken?.price ?? 0;
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -41,11 +37,7 @@ function TerminalContent({
 
       {/* Center column */}
       <div className="flex flex-col flex-1 overflow-hidden border-l border-[var(--border)]">
-        <PriceChart
-          asset={selectedMarket?.asset}
-          marketEndIso={selectedMarket?.end_date_iso}
-          midPrice={midPrice}
-        />
+        <PriceChart market={selectedMarket} />
         <Orderbook tokenId={upToken?.token_id} />
       </div>
 

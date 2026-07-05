@@ -168,4 +168,15 @@ async function flushToDb(
       .from("orderbook_state")
       .upsert(rows, { onConflict: "token_id" });
   }
+
+  // Append mid-price ticks for the market graph's history seed. tokenIds only
+  // ever contains YES tokens (see subscription setup above), so every row
+  // here already represents a market's Up-price — no NO-token filtering needed.
+  const tickRows = rows
+    .filter((r) => r.market_id)
+    .map((r) => ({ market_id: r.market_id as string, mid_price: r.mid_price }));
+
+  if (tickRows.length) {
+    await supabase.from("market_ticks").insert(tickRows);
+  }
 }

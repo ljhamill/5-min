@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
   // Fetch active markets at startup for probability calculations
   const { data: activeMarkets } = await supabase
     .from("markets")
-    .select("id, asset, end_date, token_yes_id, metadata, prob_history")
+    .select("id, asset, end_date, token_yes_id, metadata")
     .eq("source", "polymarket")
     .in("status", ["active", "upcoming"])
     .eq("accepting_orders", true);
@@ -277,20 +277,26 @@ async function flushToDb(
     await supabase.from("asset_prices").upsert(priceRows, { onConflict: "asset" });
   }
 
-  // Update model_prob + prob_history per market
+  // Update model_prob per market
   for (const market of markets) {
     const update = probUpdates[market.id as string];
     if (!update) continue;
 
-    const currentHistory: { ts: number; prob: number; mid: number }[] =
-      (market.prob_history as typeof currentHistory) ?? [];
-
-    const updated = [...currentHistory, { ts: Date.now(), prob: update.prob, mid: 0.5 }]
-      .slice(-60); // keep last 60 entries (5s × 60 = 5 min window)
-
     await supabase
       .from("markets")
-      .update({ model_prob: update.prob, edge: update.edge, prob_history: updated, updated_at: now })
+      .update({ model_prob: update.prob, edge: update.edge, updated_at: now })
       .eq("id", market.id);
+  }
+
+  // Append prob ticks for the market graph's history seed (insert-only —
+  // see market_ticks table comment in schema.sql for why this replaced the
+  // old prob_history read-modify-write, which lost most writes to a race).
+  const tickRows = Object.entries(probUpdates).map(([marketId, u]) => ({
+    market_id: marketId,
+    model_prob: u.prob,
+  }));
+
+  if (tickRows.length) {
+    await supabase.from("market_ticks").insert(tickRows);
   }
 }

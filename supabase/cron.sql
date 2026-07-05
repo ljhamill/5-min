@@ -111,6 +111,20 @@ select cron.schedule(
 );
 
 -- ---------------------------------------------------------------------------
+-- 7. Clean up market_ticks — every 15 minutes
+-- 2h retention comfortably exceeds a market's ~20-minute lifetime; keeps the
+-- table small (writers insert ~800 rows/min across all live markets).
+-- ---------------------------------------------------------------------------
+select cron.schedule(
+  'cleanup-market-ticks',
+  '*/15 * * * *',
+  $$
+  delete from public.market_ticks
+  where ts < now() - interval '2 hours';
+  $$
+);
+
+-- ---------------------------------------------------------------------------
 -- View scheduled jobs (verify setup)
 -- ---------------------------------------------------------------------------
 -- select * from cron.job;

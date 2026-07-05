@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
   LineSeries,
   ColorType,
+  LineStyle,
 } from "lightweight-charts";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
+import { useMarketHistory } from "@/hooks/useMarketHistory";
+import type { PolymarketMarket } from "@/lib/polymarket/types";
 
 type Props = {
-  asset: string | undefined;
-  marketEndIso: string | undefined;
-  midPrice: number;
+  market: PolymarketMarket | null;
 };
 
 type Candle = {
@@ -21,11 +22,6 @@ type Candle = {
   high: number;
   low: number;
   close: number;
-};
-
-type ProbPoint = {
-  time: UTCTimestamp;
-  value: number;
 };
 
 const BINANCE_SYMBOL_MAP: Record<string, string> = {
@@ -39,14 +35,55 @@ const BINANCE_SYMBOL_MAP: Record<string, string> = {
   ADA: "ADAUSDT",
 };
 
-export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Props) {
+const PCT_FORMAT = {
+  type: "custom" as const,
+  formatter: (v: number) => `${(v * 100).toFixed(0)}¢`,
+};
+
+type SeriesToggle = "market" | "model" | "asset";
+
+function ToggleChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-2.5 py-1 rounded text-[11px] font-medium transition-colors"
+      style={{
+        background: active ? "var(--accent-dim)" : "transparent",
+        color: active ? "var(--accent)" : "var(--text-secondary)",
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function PriceChart({ market }: Props) {
+  const asset = market?.asset;
+  const { midSeries, probSeries, isLoading } = useMarketHistory(market?.id);
+
+  const [visible, setVisible] = useState<Record<SeriesToggle, boolean>>({
+    market: true,
+    model: true,
+    asset: false,
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const probSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const probDataRef = useRef<ProbPoint[]>([]);
+  const marketSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const modelSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const hasFitRef = useRef(false);
 
   // Initialize chart once
   useEffect(() => {
@@ -69,7 +106,7 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
         borderColor: "#1e1e26",
       },
       leftPriceScale: {
-        visible: true,
+        visible: false,
         borderColor: "#1e1e26",
       },
       timeScale: {
@@ -83,7 +120,43 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
 
     chartRef.current = chart;
 
-    // Candlestick series on right scale
+    // Market (Up) price — main series, right scale, 0–100¢
+    const marketSeries = chart.addSeries(LineSeries, {
+      color: "#4f5cf0",
+      lineWidth: 2,
+      priceScaleId: "right",
+      title: "Market",
+      priceFormat: PCT_FORMAT,
+      lastValueVisible: true,
+      priceLineVisible: false,
+    });
+    marketSeriesRef.current = marketSeries;
+
+    // Model probability — dashed, same right scale
+    const modelSeries = chart.addSeries(LineSeries, {
+      color: "#f0a94f",
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      priceScaleId: "right",
+      title: "Model",
+      priceFormat: PCT_FORMAT,
+      lastValueVisible: true,
+      priceLineVisible: false,
+    });
+    modelSeriesRef.current = modelSeries;
+
+    chart.priceScale("right").applyOptions({
+      scaleMargins: { top: 0.1, bottom: 0.1 },
+      autoScale: false,
+    });
+    const fixedRange = () => ({
+      priceRange: { minValue: 0, maxValue: 1 },
+      margins: { above: 0.1, below: 0.1 },
+    });
+    marketSeries.applyOptions({ autoscaleInfoProvider: fixedRange });
+    modelSeries.applyOptions({ autoscaleInfoProvider: fixedRange });
+
+    // Asset candles — left scale, off by default
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#22c55e",
       downColor: "#ef4444",
@@ -91,34 +164,10 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
       borderDownColor: "#ef4444",
       wickUpColor: "#22c55e",
       wickDownColor: "#ef4444",
-      priceScaleId: "right",
+      priceScaleId: "left",
+      visible: false,
     });
     candleSeriesRef.current = candleSeries;
-
-    // Prob line on left scale (0–1)
-    const probSeries = chart.addSeries(LineSeries, {
-      color: "#4f5cf0",
-      lineWidth: 2,
-      priceScaleId: "left",
-      title: "Prob",
-      lastValueVisible: true,
-      priceLineVisible: false,
-    });
-
-    chart.priceScale("left").applyOptions({
-      scaleMargins: { top: 0.1, bottom: 0.1 },
-      autoScale: false,
-      visible: true,
-    });
-    // Fix left scale to 0–1
-    probSeries.applyOptions({
-      autoscaleInfoProvider: () => ({
-        priceRange: { minValue: 0, maxValue: 1 },
-        margins: { above: 0.1, below: 0.1 },
-      }),
-    });
-
-    probSeriesRef.current = probSeries;
 
     // ResizeObserver
     const ro = new ResizeObserver((entries) => {
@@ -135,26 +184,43 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
-      probSeriesRef.current = null;
+      marketSeriesRef.current = null;
+      modelSeriesRef.current = null;
     };
   }, []);
 
-  // Fetch + subscribe whenever asset changes
+  // Push history + live series data as it changes
+  useEffect(() => {
+    marketSeriesRef.current?.setData(midSeries);
+  }, [midSeries]);
+
+  useEffect(() => {
+    modelSeriesRef.current?.setData(probSeries);
+  }, [probSeries]);
+
+  // Fit the view once per market, after the initial history seed lands
+  useEffect(() => {
+    hasFitRef.current = false;
+  }, [market?.id]);
+
+  useEffect(() => {
+    if (hasFitRef.current || isLoading) return;
+    if (midSeries.length === 0 && probSeries.length === 0) return;
+    chartRef.current?.timeScale().fitContent();
+    hasFitRef.current = true;
+  }, [midSeries, probSeries, isLoading]);
+
+  // Asset candles — fetch + subscribe whenever asset changes (unchanged logic,
+  // just rendered on the left scale now and gated by the "asset" toggle)
   useEffect(() => {
     if (!asset) return;
 
     const symbol = BINANCE_SYMBOL_MAP[asset];
     if (!symbol) return;
 
-    // Clear previous data
-    probDataRef.current = [];
     candleSeriesRef.current?.setData([]);
-    probSeriesRef.current?.setData([]);
-
-    // Close previous WS
     wsRef.current?.close();
 
-    // Fetch historical 1m candles
     const fetchCandles = async () => {
       try {
         const res = await fetch(
@@ -177,7 +243,6 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
 
     fetchCandles();
 
-    // Subscribe to live kline WebSocket
     const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1m`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -185,14 +250,7 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data) as {
-          k: {
-            t: number;
-            o: string;
-            h: string;
-            l: string;
-            c: string;
-            x: boolean;
-          };
+          k: { t: number; o: string; h: string; l: string; c: string };
         };
         const k = msg.k;
         const candle: Candle = {
@@ -216,32 +274,25 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
     };
   }, [asset]);
 
-  // Update prob line whenever midPrice changes
+  // Apply toggle visibility
   useEffect(() => {
-    if (!midPrice || midPrice <= 0 || !probSeriesRef.current) return;
+    marketSeriesRef.current?.applyOptions({ visible: visible.market });
+  }, [visible.market]);
 
-    const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
-    const pts = probDataRef.current;
+  useEffect(() => {
+    modelSeriesRef.current?.applyOptions({ visible: visible.model });
+  }, [visible.model]);
 
-    // Avoid duplicate timestamps
-    const last = pts[pts.length - 1];
-    if (last && last.time === nowSec) {
-      last.value = midPrice;
-    } else {
-      pts.push({ time: nowSec, value: midPrice });
-    }
+  useEffect(() => {
+    candleSeriesRef.current?.applyOptions({ visible: visible.asset });
+    chartRef.current?.priceScale("left").applyOptions({ visible: visible.asset });
+  }, [visible.asset]);
 
-    // Keep only last 200 points to avoid unbounded growth
-    if (pts.length > 200) pts.splice(0, pts.length - 200);
+  function toggle(key: SeriesToggle) {
+    setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
-    try {
-      probSeriesRef.current.setData([...pts]);
-    } catch {
-      // ignore series update errors (e.g. out-of-order time)
-    }
-  }, [midPrice]);
-
-  if (!asset) {
+  if (!market) {
     return (
       <div
         className="flex-1 flex items-center justify-center"
@@ -253,10 +304,29 @@ export function PriceChart({ asset, marketEndIso: _marketEndIso, midPrice }: Pro
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 w-full"
-      style={{ background: "#0c0c10", minHeight: 0 }}
-    />
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#0c0c10" }}>
+      {/* Series toggles */}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 shrink-0 border-b"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <ToggleChip label="Market" active={visible.market} onClick={() => toggle("market")} />
+        <ToggleChip label="Model" active={visible.model} onClick={() => toggle("model")} />
+        {asset && (
+          <ToggleChip
+            label={`${asset} price`}
+            active={visible.asset}
+            onClick={() => toggle("asset")}
+          />
+        )}
+        {isLoading && (
+          <span className="text-[10px] ml-auto" style={{ color: "var(--text-dim)" }}>
+            Loading history…
+          </span>
+        )}
+      </div>
+
+      <div ref={containerRef} className="flex-1 w-full" style={{ minHeight: 0 }} />
+    </div>
   );
 }

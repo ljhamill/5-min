@@ -99,6 +99,28 @@ create table if not exists public.asset_prices (
 
 
 -- ---------------------------------------------------------------------------
+-- MARKET TICKS
+-- Insert-only history of a market's Up-price and model probability, appended
+-- every ~5s by the price/orderbook workers. Powers the market graph's instant
+-- history-on-open — Realtime broadcasts are ephemeral and can't be replayed,
+-- so this table is the seed; the browser's live tail still comes from
+-- Realtime broadcast, not from polling this table.
+-- Retention: cleaned up ~2h after write (see cron.sql) — a market only lives
+-- ~20 minutes, so 2h is a generous safety margin, not a real retention window.
+-- ---------------------------------------------------------------------------
+create table if not exists public.market_ticks (
+  id          bigint generated always as identity primary key,
+  market_id   text not null references public.markets(id) on delete cascade,
+  ts          timestamptz not null default now(),
+  mid_price   numeric,          -- Up-token orderbook mid (null on prob-only rows)
+  model_prob  numeric           -- model probability (null on mid-only rows)
+);
+
+create index if not exists market_ticks_market_ts_idx
+  on public.market_ticks(market_id, ts);
+
+
+-- ---------------------------------------------------------------------------
 -- ORDERBOOK STATE
 -- One row per CLOB token, upserted in place on each orderbook WebSocket message.
 -- Stores top N levels only (worker trims to top 10 each side before writing).
@@ -181,6 +203,7 @@ on conflict do nothing;
 alter table public.markets        enable row level security;
 alter table public.asset_prices   enable row level security;
 alter table public.orderbook_state enable row level security;
+alter table public.market_ticks   enable row level security;
 alter table public.users          enable row level security;
 alter table public.trades         enable row level security;
 alter table public.fee_config     enable row level security;
@@ -194,6 +217,9 @@ create policy "asset_prices_public_read"
 
 create policy "orderbook_public_read"
   on public.orderbook_state for select using (true);
+
+create policy "market_ticks_public_read"
+  on public.market_ticks for select using (true);
 
 create policy "fee_config_public_read"
   on public.fee_config for select using (true);

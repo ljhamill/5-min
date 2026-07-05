@@ -53,6 +53,19 @@ function releaseChannelIfUnused() {
   }
 }
 
+// Exposed so other hooks (e.g. useMarketHistory) can tap the same broadcast
+// stream without opening a second "orderbook" channel subscription.
+export function subscribeOrderbook(listener: Listener): () => void {
+  listeners.add(listener);
+  ensureChannel();
+  return () => {
+    listeners.delete(listener);
+    releaseChannelIfUnused();
+  };
+}
+
+export type { OrderbookPayload };
+
 export function useOrderbook(tokenId: string | undefined) {
   const [book, setBook] = useState<OrderbookData | null>(null);
 

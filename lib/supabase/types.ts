@@ -78,6 +78,24 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["orderbook_state"]["Row"]>;
         Relationships: [];
       };
+      market_ticks: {
+        Row: {
+          id: number;
+          market_id: string;
+          ts: string;
+          mid_price: number | null;
+          model_prob: number | null;
+        };
+        Insert: {
+          id?: number;
+          market_id: string;
+          ts?: string;
+          mid_price?: number | null;
+          model_prob?: number | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["market_ticks"]["Row"]>;
+        Relationships: [];
+      };
       users: {
         Row: {
           wallet_address: string;
