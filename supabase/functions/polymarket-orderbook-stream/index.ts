@@ -73,11 +73,12 @@ Deno.serve(async (req) => {
   let lastDbWrite = Date.now();
 
   ws.onopen = () => {
-    // Subscribe to all YES tokens
+    // Subscribe to all YES tokens. Verified against the live CLOB WS directly —
+    // the previously used shape ({auth:{}, markets, type:"Market"}) silently
+    // never returns any messages; this is the format that actually works.
     ws.send(JSON.stringify({
-      auth:    {},
-      markets: tokenIds,
-      type:    "Market",
+      assets_ids: tokenIds,
+      type:       "market",
     }));
   };
 

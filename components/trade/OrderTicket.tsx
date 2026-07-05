@@ -7,7 +7,7 @@ import { useOrderbook } from "@/hooks/useOrderbook";
 import { useCountdown } from "@/hooks/useCountdown";
 import { calcProbability, calcEdge } from "@/lib/probability/engine";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 
 type Props = {
   market: PolymarketMarket | null;

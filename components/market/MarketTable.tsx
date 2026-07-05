@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 import { MarketRow } from "./MarketRow";
 import { useCountdown } from "@/hooks/useCountdown";
 

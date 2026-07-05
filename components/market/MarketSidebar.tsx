@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useCountdown } from "@/hooks/useCountdown";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 import { calcProbability, calcEdge } from "@/lib/probability/engine";
 
 const ASSET_ICONS: Record<string, string> = {

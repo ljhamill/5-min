@@ -3,9 +3,11 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const GAMMA_API = "https://gamma-api.polymarket.com";
 
+const ASSET_SLUGS = ["btc", "eth", "sol", "xrp", "bnb", "doge", "hype"];
+
 const SLUG_ASSET_MAP: Record<string, string> = {
   btc:  "BTC", eth:  "ETH", sol:  "SOL", xrp:  "XRP",
-  bnb:  "BNB", doge: "DOGE", hype: "HYPE", ada:  "ADA",
+  bnb:  "BNB", doge: "DOGE", hype: "HYPE",
 };
 
 function parseSlugAsset(slug: string): string | undefined {
@@ -13,42 +15,47 @@ function parseSlugAsset(slug: string): string | undefined {
   return SLUG_ASSET_MAP[prefix.toLowerCase()];
 }
 
-// Gamma API caps at 100 results — paginate to get all windows
+const WINDOW_SECONDS = 300;
+// How many 5-min windows ahead (beyond the live one) to keep synced/tradeable.
+const WINDOWS_AHEAD = 3;
+
+// Bulk-listing via /events?active=true&closed=false&order=startDate&... turned out
+// to be a dead end: Polymarket's Gamma API (a) interleaves thousands of unrelated
+// long-running markets whose own startDate ordering has nothing to do with our
+// 5-min windows, and (b) hard-errors (422) once pagination offset exceeds ~2100 —
+// while our live window sits ~24h / ~2000 events deep in descending order. No
+// pagination strategy can reach it reliably.
+//
+// Since the slug format is deterministic — `{asset}-updown-5m-{5min-aligned-unix}`
+// — we can compute the exact slugs for the live window + next few windows and
+// fetch each directly via /events?slug=X. Exact, fast (one request per
+// asset×window, all in parallel), and immune to both problems above.
 async function fetchAllFiveMinEvents(): Promise<Record<string, unknown>[]> {
-  const all: Record<string, unknown>[] = [];
-  let offset = 0;
-  const limit = 100;
+  const now = Date.now();
+  const currentWindowStart = Math.floor(now / 1000 / WINDOW_SECONDS) * WINDOW_SECONDS;
 
-  while (true) {
-    const url = `${GAMMA_API}/events?active=true&closed=false&limit=${limit}&offset=${offset}&order=startDate&ascending=false`;
-    const res = await fetch(url, { headers: { "User-Agent": "5min-terminal/1.0" } });
-    if (!res.ok) throw new Error(`Gamma API ${res.status}`);
-
-    const page: Record<string, unknown>[] = await res.json();
-    if (!page.length) break;
-
-    const fiveMin = page.filter((e) => (e.slug as string)?.includes("updown-5m"));
-    all.push(...fiveMin);
-
-    // Stop paginating if we've gone far enough back in time:
-    // if the oldest event on this page started more than 48h ago, we have everything relevant
-    const oldest = page[page.length - 1];
-    const oldestStart = oldest?.startDate as string;
-    if (oldestStart) {
-      const oldestTs = new Date(oldestStart).getTime();
-      if (Date.now() - oldestTs > 48 * 60 * 60 * 1000) break;
-    }
-
-    // If we got fewer results than the limit, we've reached the end
-    if (page.length < limit) break;
-
-    offset += limit;
-
-    // Safety: don't paginate more than 10 pages (1000 events)
-    if (offset >= 1000) break;
+  const slugs: string[] = [];
+  for (let w = 0; w <= WINDOWS_AHEAD; w++) {
+    const windowStart = currentWindowStart + w * WINDOW_SECONDS;
+    for (const asset of ASSET_SLUGS) slugs.push(`${asset}-updown-5m-${windowStart}`);
   }
 
-  return all;
+  const results = await Promise.all(
+    slugs.map(async (slug) => {
+      try {
+        const res = await fetch(`${GAMMA_API}/events?slug=${slug}`, {
+          headers: { "User-Agent": "5min-terminal/1.0" },
+        });
+        if (!res.ok) return null;
+        const data: Record<string, unknown>[] = await res.json();
+        return data[0] ?? null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return results.filter((e): e is Record<string, unknown> => e !== null);
 }
 
 Deno.serve(async (req) => {
@@ -121,6 +128,10 @@ Deno.serve(async (req) => {
           price_no:         priceNo,
           mid_price:        (priceYes + priceNo) / 2,
           status,
+          // fetchAllFiveMinEvents() only ever returns the live window + the next
+          // WINDOWS_AHEAD windows (computed directly, not bulk-listed), so trusting
+          // Gamma's own acceptingOrders flag here is safe — it can no longer be
+          // polluted by markets 24h out the way bulk pagination was.
           accepting_orders: Boolean(market.acceptingOrders),
           metadata: {
             neg_risk:  false,

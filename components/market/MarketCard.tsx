@@ -6,7 +6,7 @@ import { calcProbability } from "@/lib/probability/engine";
 import { ProbabilityBar } from "@/components/probability/ProbabilityBar";
 import { TradePanel } from "@/components/market/TradePanel";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 
 type Props = {
   market: PolymarketMarket;

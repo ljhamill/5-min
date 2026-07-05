@@ -1,6 +1,6 @@
 "use client";
 
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 import { useAccount } from "wagmi";
 
 type Props = {

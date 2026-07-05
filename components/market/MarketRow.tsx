@@ -7,7 +7,7 @@ import { calcProbability } from "@/lib/probability/engine";
 import { useTrade } from "@/hooks/useTrade";
 import { useAccount } from "wagmi";
 import type { PolymarketMarket } from "@/lib/polymarket/types";
-import type { AssetData } from "@/hooks/useBinancePrice";
+import type { AssetData } from "@/hooks/useAssetPrices";
 
 type Props = {
   market: PolymarketMarket;

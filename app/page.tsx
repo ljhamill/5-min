@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect, useState } from "react";
 import { useMarkets } from "@/hooks/useMarkets";
-import { useBinancePrices } from "@/hooks/useBinancePrice";
+import { useAssetPricesMap } from "@/hooks/useAssetPrices";
 import { TopNav } from "@/components/layout/TopNav";
 import { SubNav } from "@/components/layout/SubNav";
 import { BottomBar } from "@/components/layout/BottomBar";
@@ -21,7 +21,7 @@ function TerminalContent({
   onSelect,
 }: {
   markets: PolymarketMarket[];
-  prices: Record<string, import("@/hooks/useBinancePrice").AssetData>;
+  prices: Record<string, import("@/hooks/useAssetPrices").AssetData>;
   selectedMarket: PolymarketMarket | null;
   onSelect: (m: PolymarketMarket) => void;
 }) {
@@ -63,12 +63,7 @@ export default function TerminalPage() {
   const [activeAsset, setActiveAsset] = useState("All");
   const [selectedMarket, setSelectedMarket] = useState<PolymarketMarket | null>(null);
 
-  const assets = useMemo(
-    () => [...new Set((markets ?? []).map((m) => m.asset).filter(Boolean) as string[])],
-    [markets],
-  );
-
-  const prices = useBinancePrices(assets);
+  const prices = useAssetPricesMap();
 
   const filteredMarkets = useMemo(() => {
     if (!markets) return [];

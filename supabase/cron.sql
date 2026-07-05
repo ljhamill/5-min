@@ -29,14 +29,17 @@ select cron.schedule(
 );
 
 -- ---------------------------------------------------------------------------
--- 2. Binance price stream — every minute (runs for 55s internally)
+-- 2. Chainlink + Pyth + Hyperliquid price stream — every minute (runs for 55s internally)
+--    Sources: Chainlink on-chain (Polygon) for BTC/ETH/SOL/BNB/DOGE
+--             Pyth Hermes REST for XRP/ADA
+--             Hyperliquid REST for HYPE
 -- ---------------------------------------------------------------------------
 select cron.schedule(
-  'binance-price-stream',
+  'chainlink-price-stream',
   '* * * * *',
   $$
   select net.http_post(
-    url     := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/binance-price-stream',
+    url     := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/chainlink-price-stream',
     headers := jsonb_build_object(
       'Content-Type',  'application/json',
       'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY'
