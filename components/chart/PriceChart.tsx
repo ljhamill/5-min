@@ -68,7 +68,8 @@ function ToggleChip({
 
 export function PriceChart({ market }: Props) {
   const asset = market?.asset;
-  const { midSeries, probSeries, isLoading } = useMarketHistory(market?.id);
+  const yesTokenId = market?.tokens.find((t) => t.outcome === "Yes")?.token_id;
+  const { midSeries, probSeries, isLoading } = useMarketHistory(market?.id, yesTokenId);
 
   const [visible, setVisible] = useState<Record<SeriesToggle, boolean>>({
     market: true,
@@ -241,35 +242,54 @@ export function PriceChart({ market }: Props) {
       }
     };
 
-    fetchCandles();
-
     const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1m`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let closedByCleanup = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as {
-          k: { t: number; o: string; h: string; l: string; c: string };
-        };
-        const k = msg.k;
-        const candle: Candle = {
-          time: (k.t / 1000) as UTCTimestamp,
-          open: parseFloat(k.o),
-          high: parseFloat(k.h),
-          low: parseFloat(k.l),
-          close: parseFloat(k.c),
-        };
-        candleSeriesRef.current?.update(candle);
-      } catch {
-        // ignore parse errors
-      }
-    };
+    function connect() {
+      // Re-fetch the REST klines on every (re)connect so any candles missed
+      // during a disconnect get backfilled instead of leaving a visible gap.
+      fetchCandles();
 
-    ws.onerror = () => ws.close();
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as {
+            k: { t: number; o: string; h: string; l: string; c: string };
+          };
+          const k = msg.k;
+          const candle: Candle = {
+            time: (k.t / 1000) as UTCTimestamp,
+            open: parseFloat(k.o),
+            high: parseFloat(k.h),
+            low: parseFloat(k.l),
+            close: parseFloat(k.c),
+          };
+          candleSeriesRef.current?.update(candle);
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onerror = () => ws.close();
+
+      // Reconnect on drop so candles don't silently stop forever after a
+      // transient disconnect (the previous code had no reconnect, so any WS
+      // error froze the candle series until the market was reselected).
+      ws.onclose = () => {
+        if (closedByCleanup) return;
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+    }
+
+    connect();
 
     return () => {
-      ws.close();
+      closedByCleanup = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, [asset]);
