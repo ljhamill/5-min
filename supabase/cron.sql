@@ -4,6 +4,17 @@
 -- Run in Supabase SQL Editor after deploying Edge Functions.
 -- Replace YOUR_PROJECT_REF and YOUR_SERVICE_ROLE_KEY with real values.
 -- Find them in: Supabase Dashboard → Settings → API
+--
+-- ⚠️  CRITICAL: the functions have verify_jwt = true, so an unreplaced
+--     YOUR_SERVICE_ROLE_KEY placeholder makes every cron invocation fail with
+--     401 — SILENTLY. cron.job_run_details will still show status 'succeeded'
+--     because net.http_post only reports that the request was QUEUED, not that
+--     the Edge Function accepted it. This actually happened to
+--     chainlink-price-stream and went unnoticed for ~12h (stale asset_prices,
+--     no model_prob). After scheduling, VERIFY the real key is in place:
+--       select jobname, command like '%YOUR_SERVICE_ROLE_KEY%' as broken
+--       from cron.job;
+--     and confirm the target tables are actually updating within ~90s.
 -- =============================================================================
 
 -- Enable required extensions
