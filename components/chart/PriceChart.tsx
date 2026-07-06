@@ -76,10 +76,12 @@ export function PriceChart({ market }: Props) {
     model: true,
     asset: false,
   });
+  const [assetMode, setAssetMode] = useState<"line" | "candle">("line");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const assetLineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const marketSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const modelSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -146,9 +148,14 @@ export function PriceChart({ market }: Props) {
     });
     modelSeriesRef.current = modelSeries;
 
+    // Pin the right (probability) scale to a fixed 0–1 range. This MUST use
+    // autoScale: true — the autoscaleInfoProvider below is only consulted while
+    // autoscaling is enabled; with autoScale: false the provider is ignored and
+    // the scale is left with no valid range, so the market/model lines map to
+    // nowhere and silently don't render.
     chart.priceScale("right").applyOptions({
       scaleMargins: { top: 0.1, bottom: 0.1 },
-      autoScale: false,
+      autoScale: true,
     });
     const fixedRange = () => ({
       priceRange: { minValue: 0, maxValue: 1 },
@@ -157,7 +164,9 @@ export function PriceChart({ market }: Props) {
     marketSeries.applyOptions({ autoscaleInfoProvider: fixedRange });
     modelSeries.applyOptions({ autoscaleInfoProvider: fixedRange });
 
-    // Asset candles — left scale, off by default
+    // Asset price — left scale, off by default. Two representations of the same
+    // underlying data (candles + a line); the "asset" toggle + line/candle mode
+    // decide which (if either) is visible.
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: "#22c55e",
       downColor: "#ef4444",
@@ -169,6 +178,16 @@ export function PriceChart({ market }: Props) {
       visible: false,
     });
     candleSeriesRef.current = candleSeries;
+
+    const assetLineSeries = chart.addSeries(LineSeries, {
+      color: "#8a8a99",
+      lineWidth: 2,
+      priceScaleId: "left",
+      lastValueVisible: true,
+      priceLineVisible: false,
+      visible: false,
+    });
+    assetLineSeriesRef.current = assetLineSeries;
 
     // ResizeObserver
     const ro = new ResizeObserver((entries) => {
@@ -185,6 +204,7 @@ export function PriceChart({ market }: Props) {
       chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
+      assetLineSeriesRef.current = null;
       marketSeriesRef.current = null;
       modelSeriesRef.current = null;
     };
@@ -211,8 +231,13 @@ export function PriceChart({ market }: Props) {
     hasFitRef.current = true;
   }, [midSeries, probSeries, isLoading]);
 
-  // Asset candles — fetch + subscribe whenever asset changes (unchanged logic,
-  // just rendered on the left scale now and gated by the "asset" toggle)
+  // Asset price — fetch + subscribe whenever asset changes. Uses 1-SECOND
+  // klines (not 1-minute): the market/model lines are 5s-resolution, and
+  // lightweight-charts builds one shared time axis across all series. With 1m
+  // candles the axis had ~11 empty 5s slots between each candle, rendering the
+  // candles with big gaps. 1s data is finer than the 5s line, so candles stay
+  // contiguous and the line stays smooth. Feeds both the candle and line
+  // series from the same klines so the line/candle toggle is instant.
   useEffect(() => {
     if (!asset) return;
 
@@ -220,12 +245,13 @@ export function PriceChart({ market }: Props) {
     if (!symbol) return;
 
     candleSeriesRef.current?.setData([]);
+    assetLineSeriesRef.current?.setData([]);
     wsRef.current?.close();
 
-    const fetchCandles = async () => {
+    const fetchKlines = async () => {
       try {
         const res = await fetch(
-          `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1m&limit=60`
+          `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1s&limit=1000`
         );
         if (!res.ok) return;
         const raw: unknown[][] = await res.json();
@@ -237,19 +263,22 @@ export function PriceChart({ market }: Props) {
           close: parseFloat(k[4] as string),
         }));
         candleSeriesRef.current?.setData(candles);
+        assetLineSeriesRef.current?.setData(
+          candles.map((c) => ({ time: c.time, value: c.close })),
+        );
       } catch {
         // silently ignore fetch errors
       }
     };
 
-    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1m`;
+    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_1s`;
     let closedByCleanup = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     function connect() {
-      // Re-fetch the REST klines on every (re)connect so any candles missed
+      // Re-fetch the REST klines on every (re)connect so any bars missed
       // during a disconnect get backfilled instead of leaving a visible gap.
-      fetchCandles();
+      fetchKlines();
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -260,14 +289,15 @@ export function PriceChart({ market }: Props) {
             k: { t: number; o: string; h: string; l: string; c: string };
           };
           const k = msg.k;
-          const candle: Candle = {
-            time: (k.t / 1000) as UTCTimestamp,
+          const time = (k.t / 1000) as UTCTimestamp;
+          candleSeriesRef.current?.update({
+            time,
             open: parseFloat(k.o),
             high: parseFloat(k.h),
             low: parseFloat(k.l),
             close: parseFloat(k.c),
-          };
-          candleSeriesRef.current?.update(candle);
+          });
+          assetLineSeriesRef.current?.update({ time, value: parseFloat(k.c) });
         } catch {
           // ignore parse errors
         }
@@ -275,9 +305,9 @@ export function PriceChart({ market }: Props) {
 
       ws.onerror = () => ws.close();
 
-      // Reconnect on drop so candles don't silently stop forever after a
+      // Reconnect on drop so the series don't silently stop forever after a
       // transient disconnect (the previous code had no reconnect, so any WS
-      // error froze the candle series until the market was reselected).
+      // error froze the series until the market was reselected).
       ws.onclose = () => {
         if (closedByCleanup) return;
         reconnectTimer = setTimeout(connect, 2000);
@@ -304,9 +334,10 @@ export function PriceChart({ market }: Props) {
   }, [visible.model]);
 
   useEffect(() => {
-    candleSeriesRef.current?.applyOptions({ visible: visible.asset });
+    candleSeriesRef.current?.applyOptions({ visible: visible.asset && assetMode === "candle" });
+    assetLineSeriesRef.current?.applyOptions({ visible: visible.asset && assetMode === "line" });
     chartRef.current?.priceScale("left").applyOptions({ visible: visible.asset });
-  }, [visible.asset]);
+  }, [visible.asset, assetMode]);
 
   function toggle(key: SeriesToggle) {
     setVisible((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -334,6 +365,12 @@ export function PriceChart({ market }: Props) {
               active={visible.asset}
               onClick={() => toggle("asset")}
             />
+          )}
+          {asset && visible.asset && (
+            <div className="flex items-center gap-1 pl-1">
+              <ToggleChip label="Line" active={assetMode === "line"} onClick={() => setAssetMode("line")} />
+              <ToggleChip label="Candle" active={assetMode === "candle"} onClick={() => setAssetMode("candle")} />
+            </div>
           )}
           {isLoading && (
             <span className="text-[10px] ml-auto" style={{ color: "var(--text-dim)" }}>
