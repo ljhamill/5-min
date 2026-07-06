@@ -23,7 +23,16 @@ function TerminalContent({
   selectedMarket: PolymarketMarket | null;
   onSelect: (m: PolymarketMarket) => void;
 }) {
+  const [selectedSide, setSelectedSide] = useState<"YES" | "NO">("YES");
+
+  // Reset to the Up side whenever the selected market changes
+  useEffect(() => {
+    setSelectedSide("YES");
+  }, [selectedMarket?.id]);
+
   const upToken = selectedMarket?.tokens.find((t) => t.outcome === "Yes");
+  const downToken = selectedMarket?.tokens.find((t) => t.outcome === "No");
+  const bookTokenId = selectedSide === "YES" ? upToken?.token_id : downToken?.token_id;
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -38,13 +47,15 @@ function TerminalContent({
       {/* Center column */}
       <div className="flex flex-col flex-1 overflow-hidden border-l border-[var(--border)]">
         <PriceChart market={selectedMarket} />
-        <Orderbook tokenId={upToken?.token_id} />
+        <Orderbook tokenId={bookTokenId} side={selectedSide} />
       </div>
 
       {/* Right panel */}
       <OrderTicket
         market={selectedMarket}
         assetData={selectedMarket?.asset ? prices[selectedMarket.asset] : undefined}
+        selectedSide={selectedSide}
+        onSelectSide={setSelectedSide}
       />
     </div>
   );

@@ -47,13 +47,23 @@ Deno.serve(async (req) => {
 
   const markets = activeMarkets ?? [];
   const tokenToMarket: Record<string, string> = {};
+  const isYesToken: Record<string, boolean> = {};
   for (const m of markets) {
-    if (m.token_yes_id) tokenToMarket[m.token_yes_id] = m.id;
-    if (m.token_no_id)  tokenToMarket[m.token_no_id]  = m.id;
+    if (m.token_yes_id) {
+      tokenToMarket[m.token_yes_id] = m.id;
+      isYesToken[m.token_yes_id] = true;
+    }
+    if (m.token_no_id) {
+      tokenToMarket[m.token_no_id] = m.id;
+      isYesToken[m.token_no_id] = false;
+    }
   }
 
+  // Subscribe to both sides — the Up (YES) and Down (NO) books are
+  // independent order books, not simple mirrors of each other, so the Down
+  // side needs its own live feed rather than being derived as 1 - YES price.
   const tokenIds = markets
-    .map((m) => m.token_yes_id)
+    .flatMap((m) => [m.token_yes_id, m.token_no_id])
     .filter(Boolean) as string[];
 
   if (!tokenIds.length) {
@@ -129,7 +139,7 @@ Deno.serve(async (req) => {
       const now = Date.now();
       if (now - lastDbWrite >= DB_WRITE_INTERVAL) {
         lastDbWrite = now;
-        flushToDb(supabase, books, tokenToMarket);
+        flushToDb(supabase, books, tokenToMarket, isYesToken);
       }
     } catch (err) {
       console.error("orderbook message error:", err);
@@ -159,6 +169,7 @@ async function flushToDb(
   supabase: ReturnType<typeof createClient>,
   books:          Record<string, OrderbookState>,
   tokenToMarket:  Record<string, string>,
+  isYesToken:     Record<string, boolean>,
 ) {
   const now = new Date().toISOString();
   const rows = Object.entries(books).map(([tokenId, b]) => ({
@@ -180,11 +191,11 @@ async function flushToDb(
       .upsert(rows, { onConflict: "token_id" });
   }
 
-  // Append mid-price ticks for the market graph's history seed. tokenIds only
-  // ever contains YES tokens (see subscription setup above), so every row
-  // here already represents a market's Up-price — no NO-token filtering needed.
+  // Append mid-price ticks for the market graph's history seed. Now that both
+  // YES and NO tokens are subscribed, only insert the YES (Up) side here —
+  // the "Market" chart series specifically means the Up price, not either side.
   const tickRows = rows
-    .filter((r) => r.market_id)
+    .filter((r) => r.market_id && isYesToken[r.token_id])
     .map((r) => ({ market_id: r.market_id as string, mid_price: r.mid_price }));
 
   if (tickRows.length) {

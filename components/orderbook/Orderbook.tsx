@@ -4,6 +4,7 @@ import { useOrderbook } from "@/hooks/useOrderbook";
 
 type Props = {
   tokenId: string | undefined;
+  side?: "YES" | "NO";
 };
 
 function formatPrice(price: string): string {
@@ -58,7 +59,7 @@ function LevelRow({
   );
 }
 
-export function Orderbook({ tokenId }: Props) {
+export function Orderbook({ tokenId, side }: Props) {
   const book = useOrderbook(tokenId);
 
   if (!tokenId) {
@@ -123,6 +124,17 @@ export function Orderbook({ tokenId }: Props) {
         className="flex items-center px-3 py-1.5 border-b border-[var(--border)] shrink-0"
         style={{ background: "var(--bg-elevated)" }}
       >
+        {side && (
+          <span
+            className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded mr-2"
+            style={{
+              background: side === "YES" ? "var(--green-dim)" : "var(--red-dim)",
+              color: side === "YES" ? "var(--green)" : "var(--red)",
+            }}
+          >
+            {side === "YES" ? "Up" : "Down"} book
+          </span>
+        )}
         <span className="text-[10px] font-medium uppercase tracking-wide flex-1" style={{ color: "var(--green)" }}>
           Bids
         </span>

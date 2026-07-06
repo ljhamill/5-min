@@ -11,9 +11,13 @@ import type { AssetData } from "@/hooks/useAssetPrices";
 import { TRADING_ENABLED } from "@/lib/featureFlags";
 import { SoonBadge } from "@/components/ui/SoonBadge";
 
+type Side = "YES" | "NO";
+
 type Props = {
   market: PolymarketMarket | null;
   assetData: AssetData | undefined;
+  selectedSide: Side;
+  onSelectSide: (side: Side) => void;
 };
 
 function fmt(price: number): string {
@@ -43,7 +47,7 @@ function EdgeBadge({ edge }: { edge: number }) {
   );
 }
 
-export function OrderTicket({ market, assetData }: Props) {
+export function OrderTicket({ market, assetData, selectedSide, onSelectSide }: Props) {
   const { isConnected } = useAccount();
   const { state, executeTrade } = useTrade();
   const [amount, setAmount] = useState(25);
@@ -51,11 +55,14 @@ export function OrderTicket({ market, assetData }: Props) {
   const upToken = market?.tokens.find((t) => t.outcome === "Yes");
   const downToken = market?.tokens.find((t) => t.outcome === "No");
 
-  const book = useOrderbook(upToken?.token_id);
+  // Each side has its own independent order book — not a mirror of the other.
+  const bookYes = useOrderbook(upToken?.token_id);
+  const bookNo = useOrderbook(downToken?.token_id);
+
   const { secondsRemaining } = useCountdown(market?.end_date_iso ?? new Date(0).toISOString());
 
   const livePrice = assetData?.price ?? 0;
-  const marketMidPrice = book?.midPrice ?? upToken?.price ?? 0.5;
+  const marketMidPrice = bookYes?.midPrice ?? upToken?.price ?? 0.5;
 
   const probResult = useMemo(() => {
     if (!livePrice || !secondsRemaining || !assetData) return null;
@@ -76,13 +83,11 @@ export function OrderTicket({ market, assetData }: Props) {
   const isPending =
     state.status === "signing" || state.status === "pending";
 
-  function handleTrade(side: "YES" | "NO") {
+  function handleSideClick(side: Side) {
+    onSelectSide(side);
     if (!TRADING_ENABLED) return;
-    if (!market) return;
-    const tokenId =
-      side === "YES"
-        ? upToken?.token_id ?? ""
-        : downToken?.token_id ?? "";
+    if (!market || !isConnected || isPending) return;
+    const tokenId = side === "YES" ? upToken?.token_id ?? "" : downToken?.token_id ?? "";
     executeTrade({
       tokenId,
       amountUsdc: amount,
@@ -223,77 +228,67 @@ export function OrderTicket({ market, assetData }: Props) {
           </div>
         </div>
 
-        {/* Trade buttons */}
-        {!TRADING_ENABLED ? (
-          <div
-            className="flex items-center justify-center gap-2 py-3 rounded text-[12px]"
+        {/* Up/Down — always clickable: selects which side's book is shown
+            below and to the left, and (when trading is live and a wallet is
+            connected) also submits the trade. */}
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => handleSideClick("YES")}
+            disabled={isPending}
+            className="flex items-center justify-between px-4 py-3 rounded font-medium text-[13px] transition-all disabled:opacity-40"
             style={{
-              background: "var(--bg-overlay)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
+              background: "var(--green-dim)",
+              color: "var(--green)",
+              border: `1px solid ${selectedSide === "YES" ? "var(--green)" : "rgba(34,197,94,0.25)"}`,
+              boxShadow: selectedSide === "YES" ? "0 0 0 1px var(--green)" : "none",
             }}
           >
-            Trading coming soon
-            <SoonBadge />
-          </div>
-        ) : !isConnected ? (
-          <div
-            className="flex items-center justify-center py-3 rounded text-[12px]"
-            style={{
-              background: "var(--bg-overlay)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            Connect wallet to trade
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {/* Up (YES) */}
-            <button
-              disabled={isPending}
-              onClick={() => handleTrade("YES")}
-              className="flex items-center justify-between px-4 py-3 rounded font-medium text-[13px] transition-all disabled:opacity-40"
-              style={{
-                background: "var(--green-dim)",
-                color: "var(--green)",
-                border: "1px solid rgba(34,197,94,0.25)",
-              }}
-            >
-              <span className="flex items-center gap-1.5">
-                <span>▲</span>
-                <span>Up (YES)</span>
+            <span className="flex items-center gap-1.5">
+              <span>▲</span>
+              <span>Up (YES)</span>
+            </span>
+            {bookYes && (
+              <span className="text-[11px] opacity-70 tabnum">
+                {(bookYes.bestAsk * 100).toFixed(0)}¢
               </span>
-              {book && (
-                <span className="text-[11px] opacity-70 tabnum">
-                  {(book.bestAsk * 100).toFixed(0)}¢
-                </span>
-              )}
-            </button>
+            )}
+          </button>
 
-            {/* Down (NO) */}
-            <button
-              disabled={isPending}
-              onClick={() => handleTrade("NO")}
-              className="flex items-center justify-between px-4 py-3 rounded font-medium text-[13px] transition-all disabled:opacity-40"
-              style={{
-                background: "var(--red-dim)",
-                color: "var(--red)",
-                border: "1px solid rgba(239,68,68,0.25)",
-              }}
-            >
-              <span className="flex items-center gap-1.5">
-                <span>▼</span>
-                <span>Down (NO)</span>
+          <button
+            onClick={() => handleSideClick("NO")}
+            disabled={isPending}
+            className="flex items-center justify-between px-4 py-3 rounded font-medium text-[13px] transition-all disabled:opacity-40"
+            style={{
+              background: "var(--red-dim)",
+              color: "var(--red)",
+              border: `1px solid ${selectedSide === "NO" ? "var(--red)" : "rgba(239,68,68,0.25)"}`,
+              boxShadow: selectedSide === "NO" ? "0 0 0 1px var(--red)" : "none",
+            }}
+          >
+            <span className="flex items-center gap-1.5">
+              <span>▼</span>
+              <span>Down (NO)</span>
+            </span>
+            {bookNo && (
+              <span className="text-[11px] opacity-70 tabnum">
+                {(bookNo.bestAsk * 100).toFixed(0)}¢
               </span>
-              {book && (
-                <span className="text-[11px] opacity-70 tabnum">
-                  {((1 - book.bestBid) * 100).toFixed(0)}¢
-                </span>
-              )}
-            </button>
-          </div>
-        )}
+            )}
+          </button>
+
+          {/* Inline status hint — doesn't replace the buttons, since they
+              must stay clickable as the side-selector regardless of mode */}
+          {!TRADING_ENABLED ? (
+            <div className="flex items-center justify-center gap-2 py-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
+              Trading coming soon
+              <SoonBadge />
+            </div>
+          ) : !isConnected ? (
+            <div className="flex items-center justify-center py-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
+              Connect wallet to trade
+            </div>
+          ) : null}
+        </div>
 
         {/* View on Polymarket — permanent, renders in both MVP and full-trading modes */}
         {market.slug && (
