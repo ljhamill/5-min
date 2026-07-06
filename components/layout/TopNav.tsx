@@ -40,7 +40,7 @@ export function TopNav({ activeVertical = "crypto" }: Props) {
             <path d="M10 5L15 10L10 15L5 10L10 5Z" fill="var(--bg-surface)" />
           </svg>
           <span className="text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">
-            5MIN
+            INCANTR
           </span>
         </Link>
 

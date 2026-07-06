@@ -64,7 +64,7 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-[var(--border)]">
           <div>
-            <div className="text-[10px] text-[var(--text-secondary)] mb-1">5MIN TERMINAL</div>
+            <div className="text-[10px] text-[var(--text-secondary)] mb-1">INCANTR TERMINAL</div>
             <h1 className="text-sm text-[var(--amber)]">ADMIN PANEL</h1>
           </div>
           <WalletButton />

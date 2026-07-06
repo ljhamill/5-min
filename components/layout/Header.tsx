@@ -20,7 +20,7 @@ export function Header({ tickers }: Props) {
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs font-medium text-[var(--amber)] tracking-widest">
-            5MIN
+            INCANTR
           </Link>
           <span className="text-[var(--text-dim)]">|</span>
           <span className="text-[10px] text-[var(--text-secondary)]">

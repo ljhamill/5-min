@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "5 Min Terminal",
+  title: "Incantr Terminal",
   description: "Trade Polymarket 5-minute crypto markets",
 };
 
