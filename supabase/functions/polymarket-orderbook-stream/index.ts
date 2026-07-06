@@ -94,8 +94,19 @@ Deno.serve(async (req) => {
         if (!tokenId) continue;
 
         if (evt.event_type === "book") {
-          const bids: Level[] = (evt.bids ?? []).slice(0, 10);
-          const asks: Level[] = (evt.asks ?? []).slice(0, 10);
+          // The CLOB sends bids ascending (worst/lowest-price first) and asks
+          // descending (worst/highest-price first). Slicing the raw arrays
+          // to the first 10 elements therefore kept the WORST 10 levels on
+          // each side and silently discarded the real top of book — best_bid
+          // ended up being whatever price sat 10 levels up from the bottom
+          // (often exactly 10¢), never the market's actual best bid. Sort to
+          // the best side first, then slice.
+          const bids: Level[] = [...(evt.bids ?? [])]
+            .sort((a, b) => parseFloat(b.price) - parseFloat(a.price))
+            .slice(0, 10);
+          const asks: Level[] = [...(evt.asks ?? [])]
+            .sort((a, b) => parseFloat(a.price) - parseFloat(b.price))
+            .slice(0, 10);
           const bestBid  = getBestBid(bids);
           const bestAsk  = getBestAsk(asks);
           const midPrice = (bestBid + bestAsk) / 2;
