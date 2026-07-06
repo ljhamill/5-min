@@ -198,6 +198,20 @@ on conflict do nothing;
 
 
 -- ---------------------------------------------------------------------------
+-- WAITLIST
+-- Emails captured from the incantr.com marketing/landing page while the
+-- terminal is in closed beta. Anon can INSERT only — no public read, so the
+-- list itself is never exposed to the browser.
+-- ---------------------------------------------------------------------------
+create table if not exists public.waitlist (
+  id          bigint generated always as identity primary key,
+  email       text not null unique,
+  source      text,                         -- which CTA: 'hero' | 'footer' etc.
+  created_at  timestamptz not null default now()
+);
+
+
+-- ---------------------------------------------------------------------------
 -- ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------------
 alter table public.markets        enable row level security;
@@ -207,6 +221,7 @@ alter table public.market_ticks   enable row level security;
 alter table public.users          enable row level security;
 alter table public.trades         enable row level security;
 alter table public.fee_config     enable row level security;
+alter table public.waitlist       enable row level security;
 
 -- Public read for all market data (terminal is public-facing)
 create policy "markets_public_read"
@@ -227,6 +242,11 @@ create policy "fee_config_public_read"
 -- Trades: users read their own rows only
 create policy "trades_own_read"
   on public.trades for select using (true); -- tighten to wallet auth when ready
+
+-- Waitlist: anonymous signup, no public read (no SELECT/UPDATE/DELETE policy
+-- exists, so only the dashboard/service_role can read the list)
+create policy "waitlist_anon_insert"
+  on public.waitlist for insert to anon, authenticated with check (true);
 
 
 -- ---------------------------------------------------------------------------
