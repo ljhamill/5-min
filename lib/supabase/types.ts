@@ -133,6 +133,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          id: string;
+          email: string | null;
+          approved: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          email?: string | null;
+          approved?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string | null;
+          approved?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       waitlist: {
         Row: {
           id: number;

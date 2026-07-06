@@ -212,6 +212,43 @@ create table if not exists public.waitlist (
 
 
 -- ---------------------------------------------------------------------------
+-- PROFILES
+-- Mirrors auth.users (Supabase Auth) one-to-one. Created automatically by
+-- the handle_new_user trigger on signup. `approved` gates entry to the
+-- terminal during closed beta — flipped manually via SQL/dashboard for now.
+-- Deliberately separate from public.users (wallet-address-keyed identity,
+-- wired up later when wallet linking happens) — these are different
+-- identity concepts that will get connected in a future pass.
+-- ---------------------------------------------------------------------------
+create table if not exists public.profiles (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  email       text,
+  approved    boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+-- Auto-create a profile row when a new auth user signs up.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email)
+  values (new.id, new.email)
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+
+-- ---------------------------------------------------------------------------
 -- ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------------
 alter table public.markets        enable row level security;
@@ -222,6 +259,7 @@ alter table public.users          enable row level security;
 alter table public.trades         enable row level security;
 alter table public.fee_config     enable row level security;
 alter table public.waitlist       enable row level security;
+alter table public.profiles       enable row level security;
 
 -- Public read for all market data (terminal is public-facing)
 create policy "markets_public_read"
@@ -247,6 +285,15 @@ create policy "trades_own_read"
 -- exists, so only the dashboard/service_role can read the list)
 create policy "waitlist_anon_insert"
   on public.waitlist for insert to anon, authenticated with check (true);
+
+-- Profiles: users can read their own profile only (needed so the auth gate,
+-- running with the user's own session, can check `approved`). No insert or
+-- update policy at all — inserts happen only via the handle_new_user
+-- trigger (security definer, bypasses RLS), and `approved` can only be
+-- flipped via the dashboard/SQL editor. A user genuinely cannot self-approve.
+create policy "profiles_own_read"
+  on public.profiles for select
+  using (auth.uid() = id);
 
 
 -- ---------------------------------------------------------------------------

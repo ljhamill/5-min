@@ -22,7 +22,7 @@ export function MarketingNav() {
           Join the beta
         </a>
         <a
-          href="https://trade.incantr.com"
+          href="https://trade.incantr.com/auth/sign-in"
           className="px-4 py-2 rounded-full text-[13px] font-medium text-white transition-opacity hover:opacity-90"
           style={{ background: "var(--accent)" }}
         >

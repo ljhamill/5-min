@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { TRADING_ENABLED } from "@/lib/featureFlags";
 import { SoonBadge } from "@/components/ui/SoonBadge";
+import { getSupabase } from "@/lib/supabase/client";
 
 export type MarketVertical = {
   id: string;
@@ -23,8 +25,17 @@ export function TopNav({ activeVertical = "crypto" }: Props) {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const router = useRouter();
 
   const injected = connectors.find((c) => c.id === "injected");
+
+  async function handleSignOut() {
+    const supabase = getSupabase();
+    await supabase.auth.signOut();
+    // The whole /app subtree is gated in proxy.ts, so the next request there
+    // bounces to sign-in on its own — this push just makes it feel instant.
+    router.push("/");
+  }
 
   return (
     <header
@@ -89,8 +100,14 @@ export function TopNav({ activeVertical = "crypto" }: Props) {
         </nav>
       </div>
 
-      {/* Right: wallet */}
+      {/* Right: wallet + account */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={handleSignOut}
+          className="px-2.5 py-1.5 rounded text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:border-[var(--border-bright)] transition-colors"
+        >
+          Sign out
+        </button>
         {!TRADING_ENABLED ? (
           <button
             disabled
