@@ -26,11 +26,12 @@ export default function PendingApprovalPage() {
       </span>
 
       <h1 className="text-[16px] font-semibold text-[var(--text-primary)]">
-        You're on the list
+        You're on the waitlist
       </h1>
       <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-        Your account is signed in but not yet approved for the beta. We're
-        letting people in gradually — check back soon.
+        You're signed in, but the terminal isn't open to your account yet.
+        We're letting people into the beta gradually and will open it up for
+        you as soon as we can — no need to do anything else.
       </p>
     </div>
   );
